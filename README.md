@@ -8,7 +8,7 @@ Basic error handling is included: it checks that the given file exists and has t
 Both programs are based on the ginevra preprocessor implemented in Arthur Pyster's book
 *Compiler Design and Construction*, but both take advantage of C++'s standard library to
 simplify the implementation immensely. Also, since the book's implementation of the symbol
-table used a linked list instead of a hash map, so this implementation may in fact be
+table used a linked list instead of a hash map, this implementation may in fact be
 faster than the C version found in the book for programs with large numbers of `#define`s!
 
 This project was more challenging than I expected, but it helped me gain experience
