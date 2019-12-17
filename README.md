@@ -24,10 +24,10 @@ and extensible.
 ### better.cpp
 
 After writing `ginevra++.cpp` and feeling dissatisfied with its complexity, I rewrote
-the program in a procedural form, removing the separate constants representing tokens
+the program in a more procedural form, removing the separate constants representing tokens
 and greatly simplifying the conditional logic of the parser while still preserving nearly
 all of the features. The code is not the prettiest, but I think that it is much more easy to
-reason about than the OOP version in `ginevra++.cpp`.
+reason about than the more OOP version in `ginevra++.cpp`.
 
 ## Usage
 

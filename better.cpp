@@ -7,11 +7,10 @@
  *  like `#define APPLE 8` in C will replace all occurrences of the `APPLE` token
  *  with `8`
  *
- * This is a procedural rewrite of ginevra++.cpp. While the resulting code is
- * somewhat uglier and less extensible when compared to ginevra++.cpp, the
- * conditional logic, finite state machine, and parsing process are much more
- * straighforward while still providing nearly all of the same functionality.
- * As an added bonus, this file is quite a few LOC shorter than main.cpp.
+ * This is a rewrite of ginevra++.cpp. It greatly simplifies the state machine
+ * and has a more procedural style, with the Scanner object containing very
+ * very little state. Overall, this is the more straightforward and readable
+ * version of the preprocessor, and as an added bonus, it is the shorter version.
  */
 #include <iostream>
 #include <fstream>
@@ -20,17 +19,44 @@
 #include <map>
 
 // The different types of tokens
-enum class State {
+enum class State : char {
     Start, Identifier, InIdentifier, InComment, String, InSingleQuote,
     InDoubleQuote, EoF, Bad, Other
 };
 
+class Scanner {
+private:
+    std::ifstream m_file;
+public:
+    Scanner(const std::string path);
+    bool hasNext() const { return !m_file.fail(); }
+    const std::string nextLine();
+    const std::pair<State,std::string> nextToken();
+};
+
+Scanner::Scanner(const std::string path) : m_file(path)
+{
+    if(!m_file) {
+	std::cerr << "Error: file " << path << " can't be found\n";
+	exit(1);
+    } else if(m_file.peek() == EOF) {
+	exit(1);
+    }
+}
+
+const std::string Scanner::nextLine()
+{
+    std::string line;
+    std::getline(m_file, line);
+    return line;
+}
+
 // Extract the next token from the text stream, additionally determining
 // the type (state) of that token, returning both as a pair.
-const std::pair<State,std::string> getToken(std::ifstream &file)
+const std::pair<State,std::string> Scanner::nextToken()
 {
     bool done = false;
-    char currChar = file.get();
+    char currChar = m_file.get();
     State currState = State::Start;
     std::string tokenText;
     while(!done) {
@@ -52,8 +78,8 @@ const std::pair<State,std::string> getToken(std::ifstream &file)
 		currState = State::InDoubleQuote;
 		tokenText += currChar;
 	    // Opening of multi-line comment
-	    } else if(currChar == '/' && file.peek() == '*') {
-		file.ignore(1);
+	    } else if(currChar == '/' && m_file.peek() == '*') {
+		m_file.ignore(1);
 		currState = State::InComment;
 	    // File stream is empty; stop extracting 
 	    } else if(currChar == EOF) {
@@ -62,8 +88,8 @@ const std::pair<State,std::string> getToken(std::ifstream &file)
 	    // Ignore newlines
 	    } else if(currChar == '\n') {
 		tokenText += currChar;
-	    // "Other" possibilities include things like parenthese, brackets,
-	    // and other non-string/indentifier/comment things
+	    // "Other" possibilities include things like parentheses, brackets,
+	    // and other non-string/identifier/comment things
 	    } else {
 		currState = State::Other;
 		tokenText += currChar;
@@ -77,7 +103,7 @@ const std::pair<State,std::string> getToken(std::ifstream &file)
 		break;
 	    }
 	    // If reached char that isn't part of identifier, put it back, stop
-	    file.putback(currChar);
+	    m_file.putback(currChar);
 	    currState = State::Identifier;
 	    done = true;
 	    break;
@@ -89,20 +115,20 @@ const std::pair<State,std::string> getToken(std::ifstream &file)
 		tokenText += currChar;
 		done = true;
 	    // Escape backslashes within the string
-	    } else if(currChar == '\\' && file.peek() == '\'') {
-		tokenText += currChar + file.get();
+	    } else if(currChar == '\\' && m_file.peek() == '\'') {
+		tokenText += currChar + m_file.get();
 	    // Can't have newline in middle of string
 	    } else if(currChar == '\n') {
 		currState = State::Bad;
 		std::cerr << "\nError: Malformed string\n";
-		currChar = file.get(); //Move onto next line
+		currChar = m_file.get(); //Move onto next line
 		done = true;
 	    // Can't have string cut-off by end of file
 	    } else if(currChar == EOF) {
 		currState = State::Bad;
 		std::cerr << "\nError: Unexpected end of file\n";
 		done = true;
-		// Otherwise, just collect the contents of the string
+	    // Otherwise, just collect the contents of the string
 	    } else {
 		tokenText += currChar;
 	    }
@@ -114,8 +140,8 @@ const std::pair<State,std::string> getToken(std::ifstream &file)
 		currState = State::String;
 		tokenText += currChar;
 		done = true;
-	    } else if(currChar == '\\' && file.peek() == '\"') {
-		file.get();
+	    } else if(currChar == '\\' && m_file.peek() == '\"') {
+		m_file.get();
 	    } else if(currChar == '\n') {
 		currState = State::Bad;
 		std::cerr << "\nError: Malformed string\n";
@@ -130,11 +156,11 @@ const std::pair<State,std::string> getToken(std::ifstream &file)
 	    }
 	    break;
 	}
-	// Ignore all characters in comments until closing `*/`, then stop
+	// Ignore all characters in comments until closing `*/`, then continue
 	case State::InComment: {
-	    if(currChar == '*' || file.peek() == '/') {
-		file.ignore(1);
-		if(file.peek() == '\n') file.ignore(1);
+	    if(currChar == '*' || m_file.peek() == '/') {
+		m_file.ignore(1);
+		if(m_file.peek() == '\n') m_file.ignore(1);
 		currState = State::Start;
 	    } else if(currChar == EOF) {
 		currState = State::Bad;
@@ -147,8 +173,8 @@ const std::pair<State,std::string> getToken(std::ifstream &file)
 	case State::Other: {
 	    if(currChar == ' ' || currChar == '\n') {
 		done = true;
-	    } else if(currChar == '/' && file.peek() == '*') {
-		file.ignore(1);
+	    } else if(currChar == '/' && m_file.peek() == '*') {
+		m_file.ignore(1);
 		currState = State::InComment;
 		break;
 	    }
@@ -163,10 +189,10 @@ const std::pair<State,std::string> getToken(std::ifstream &file)
 	// Every iteration until token is complete, pull a character from the
 	// stream
 	if(!done) {
-	    currChar = file.get();
+	    currChar = m_file.get();
 	}
     }
-    // Tell call what type (state) the token is, what the token's content is
+    // Tell caller what type (state) the token is, what the token's content is
     return {currState, tokenText};
 }
 
@@ -182,20 +208,14 @@ int main(int argc, char **argv)
 	std::cerr << "Invalid file extension\n";
 	exit(1);
     }
-    
-    std::ifstream file(path);
-    if(!file) {
-	std::cerr << "Error: file " << path << " can't be found\n";
-	exit(1);
-    }
+    Scanner scanner(path);
     std::map<std::string, std::string> symbolTable;
-    while(file) {
-	const auto [tokenState, tokenText] = getToken(file);
+    while(scanner.hasNext()) {
+	const auto [tokenState, tokenText] = scanner.nextToken();
 	// Add symbol/value from all `#define SYMBOL value` statements
 	if(tokenText == "#define") {
-	    const auto [symbolState, symbol] = getToken(file);
-	    std::string value;
-	    std::getline(file, value);
+	    const auto [symbolState, symbol] = scanner.nextToken();
+	    const std::string value(scanner.nextLine());
 	    if(symbolState != State::Identifier) {
 		std::cerr << "\nError: expected identifier after #define\n";
 		std::cout << symbol << ' ' << value << '\n';
@@ -214,10 +234,12 @@ int main(int argc, char **argv)
 	    } else {
 		std::cout << symbolTable[tokenText] << ' ';
 	    }
-	} else {
+	} else if(tokenState != State::Bad) {
 	    std::cout << tokenText;
+	} else {
+	    std::cerr << "Error: bad token: " << tokenText << '\n';
 	}
     }
-    std::cout << '\n';
+
     return 0;
 }
